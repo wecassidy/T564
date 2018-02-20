@@ -6,6 +6,20 @@ from __future__ import division, print_function
 import serial
 
 class T564(object):
+    """
+    A Python interface to the serial programming interface of the
+    Highland Technology T564 4-channel compact advanced digital delay
+    and pulse train generator.
+
+    Simple usage
+    ------------
+
+        >>> gen = T564() # Set up the generator
+        >>> gen.a.delay = "500u" # Change the settings on a channel
+        >>> gen.write("USEC", "FIRE") # Write one or more commands over the serial interface
+        ["415238", "OK"]
+    """
+
     def __init__(self, address="/dev/ttyUSB0"):
         """Read the status of the T564."""
 
@@ -17,19 +31,37 @@ class T564(object):
         self.c = Channel(self, "C")
         self.d = Channel(self, "D")
 
-    def write(self, command):
-        self.device.write(command+"\r") # '\r' (carriage return) terminates commands
+    def write(self, *commands):
+        """
+        Write one or more commands over the serial interface.
+        Multiple commands will be joined into one long string to be
+        sent; a response will only be received once all commands have
+        been executed.  As such, this method will block the execution
+        of the program if a long command (e.g. WAIT) is executed.
+
+        Returns the responses in a list of strings, one per line of
+        response.
+        """
+        self.device.write(";".join(commands)+"\r") # '\r' (carriage return) terminates commands
         return self.device.readlines()
 
     def status(self):
         statstring = self.write("STATUS")
         for li in statstring: print(li)
 
+    def save(self):
+        """
+        Save the current settings to nonvolatile memory.  Use the
+        T564.recall() method to load saved settings.
+        """
+        return self.write("SA")
+
+    def recall(self):
+        """Load the settings saved in nonvolatile memory."""
+        return self.write("RE")
+
     def set_trigger_level(self,trigger_level):
         return self.write("TLEVEL " + str(trigger_level))
-
-    def send_command_sequence(self,command_list):
-        return self.write( ';'.join(command_list) )
 
     @staticmethod
     def norm_channel(channel):
