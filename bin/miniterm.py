@@ -1,4 +1,4 @@
-#!/home/wec/prog/amar/t564/bin/python2
+#!/home/wec/prog/amar/T564/bin/python2.7
 #
 # Very simple serial terminal
 #
