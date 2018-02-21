@@ -39,15 +39,19 @@ class T564(object):
         been executed.  As such, this method will block the execution
         of the program if a long command (e.g. WAIT) is executed.
 
-        Returns the responses in a list of strings, one per line of
-        response.
+        Returns the responses in a list of strings, one per command.
         """
         self.device.write(";".join(commands)+"\r") # '\r' (carriage return) terminates commands
-        return self.device.readlines()
+
+        response = self.device.readlines() # Read raw response
+        response = "\n".join(response) # Join into one long string
+        response = response.split(";") # Split again by command
+
+        return response
 
     def status(self):
-        statstring = self.write("STATUS")
-        for li in statstring: print(li)
+        statstring = self.write("STATUS")[0]
+        print(statstring)
 
     def save(self):
         """
