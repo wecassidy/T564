@@ -20,8 +20,14 @@ class T564(object):
         ["415238", "OK"]
     """
 
-    def __init__(self, address="/dev/ttyUSB0"):
-        """Read the status of the T564."""
+    def __init__(self, address="/dev/ttyUSB0", cycle=1000):
+        """
+        Initialize the T564.
+
+        Requires the serial port the T564 is attached to (default
+        /dev/ttyUSB0) and the length of a timing cycle in nanoseconds
+        (default 1000ns).
+        """
 
         self.device = serial.Serial(address,baudrate=38400,timeout=1) #,stopbits=1,parity='N',timeout=1)
 
@@ -30,6 +36,8 @@ class T564(object):
         self.b = Channel(self, "B")
         self.c = Channel(self, "C")
         self.d = Channel(self, "D")
+
+        self.cycle_len = cycle
 
     def write(self, *commands):
         """
@@ -63,6 +71,25 @@ class T564(object):
     def recall(self):
         """Load the settings saved in nonvolatile memory."""
         return self.write("RE")
+
+    def start(self):
+        """Start running the generator with the given settings."""
+
+        # Calculate the cycle frequency in Hertz
+        freq = 1e9 / self.cycle_len
+
+        # T564 commands:
+        return self.write(
+            "SY {:f}".format(freq), # Set the frequency synthesizer
+            "TR SY", # Trigger using the frequency synthesizer
+        )
+
+    def stop(self):
+        """Turn off all channels."""
+        self.a.enabled = False
+        self.b.enabled = False
+        self.c.enabled = False
+        self.d.enabled = False
 
     def set_trigger_level(self,trigger_level):
         return self.write("TLEVEL " + str(trigger_level))
