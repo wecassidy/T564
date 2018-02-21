@@ -182,6 +182,13 @@ class Channel(object):
         return self._status["enabled"]
     @enabled.setter
     def enabled(self, val):
+        """
+        Enable or disable the channel.
+
+        val: a truthy value enables the channel and a falsy value
+        disables it.
+        """
+
         if val:
             self._status["enabled"] = True
             self.device.write("{}S ON".format(self.name))
@@ -195,6 +202,14 @@ class Channel(object):
         return self._status["polarity"]
     @polarity.setter
     def polarity(self, val):
+        """
+        Set the polarity of the channel (active-high or active-low).
+
+        val: if a string, "po"/"pos" for active-high or "ne"/"neg" for
+        active-low.  Otherwise, a truthy value sets active-high and a
+        falsy value sets active-low.
+        """
+
         if isinstance(val, str):
             val = val.lower()
             if val == "po" or val == "pos":
@@ -219,6 +234,16 @@ class Channel(object):
         return self._status["delay"]
     @delay.setter
     def delay(self, val):
+        """
+        Set the time between the trigger firing and the rising edge of
+        the pulse.
+
+        val: converted to a string.  If not given a unit, assumed to
+        be in nanoseconds.  Acceptable units are "p" (picoseconds),
+        "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
+        "s" (seconds).
+        """
+
         val = T564.norm_time(val)
         self._status["delay"] = val
         self.device.write("{chan}D {arg:f}".format(chan=self.name, arg=val))
@@ -229,6 +254,15 @@ class Channel(object):
         return self._status["width"]
     @width.setter
     def width(self, val):
+        """
+        Set the duration of the pulse.
+
+        val: converted to a string.  If not given a unit, assumed to
+        be in nanoseconds.  Acceptable units are "p" (picoseconds),
+        "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
+        "s" (seconds).
+        """
+
         val = T564.norm_time(val)
         self._status["width"] = val
         self.device.write("{chan}W {arg:f}".format(chan=self.name, arg=val))
