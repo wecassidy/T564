@@ -213,20 +213,20 @@ class Channel(object):
         if isinstance(val, str):
             val = val.lower()
             if val == "po" or val == "pos":
-                self._status["polarity"] = True
-                self.device.write("{}S PO".format(self.name))
-            elif val == "ne" or val == "ne":
-                self._status["polarity"] = False
-                self.device.write("{}S NE".format(self.name))
+                active_high = True
+            elif val == "ne" or val == "neg":
+                active_high = False
             else:
                 raise ValueError("Invalid polarity: {}".format(val))
         else:
-            if val:
-                self._status["polarity"] = True
-                self.device.write("{}S PO".format(self.name))
-            else:
-                self._status["polarity"] = False
-                self.device.write("{}S NE".format(self.name))
+            active_high = bool(val)
+
+        if active_high:
+            self._status["polarity"] = True
+            self.device.write("{}S PO".format(self.name))
+        else:
+            self._status["polarity"] = False
+            self.device.write("{}S NE".format(self.name))
 
     @property
     def delay(self):
