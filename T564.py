@@ -18,6 +18,24 @@ class T564(object):
         >>> gen.a.delay = "500u" # Change the settings on a channel
         >>> gen.write("USEC", "FIRE") # Write one or more commands over the serial interface
         ["415238", "OK"]
+
+    Notes
+    -----
+
+        - T564 serial commands are written in ALL CAPS
+
+        - All times are converted to nanoseconds
+    """
+
+    FRAME_FOREVER = 65535
+    """
+    Set FC to this number to loop indefinitely (until FRAME OFF).
+    """
+
+    FRAME_MAX = 65534
+    """
+    Maximum value of FC (the number of times FRAME GO will cycle
+    through the frames after the first run through).
     """
 
     def __init__(self, address="/dev/ttyUSB0", cycle=1000):
@@ -31,13 +49,33 @@ class T564(object):
 
         self.device = serial.Serial(address,baudrate=38400,timeout=1) #,stopbits=1,parity='N',timeout=1)
 
-        # Channel interfaces
+        self._period = norm_time(cycle)
+
+        ## Channel interfaces
         self.a = Channel(self, "A")
         self.b = Channel(self, "B")
         self.c = Channel(self, "C")
         self.d = Channel(self, "D")
 
-        self._period = norm_time(cycle)
+        ## Frames
+        # A dict mapping frame numbers to dicts mapping channel names
+        # to channel statuses (which are also dicts, see
+        # Channel.status for how they are formatted).
+        self.frames = {}
+        self._frame_start = int(self.write("FA")[0])
+        self._frame_end = int(self.write("FB")[0])
+
+        # This variable tracks the value of FC. However, FC has some
+        # quirks: FRAME GO will run through the frames FC+1 times, so
+        # that FC 0 will result in one loop, FC 1 will result in two
+        # loops, and so on; and an infinite loop is designated by
+        # setting the value to 65535 (T564.FRAME_FOREVER). A more
+        # user-friendly counter is exposed through the frame_loops
+        # property. If frame_loops is set to 4, then FC is set to 3
+        # and FRAME GO will loop four times. If frame_loops is set to
+        # 0, FC is set to T564.FRAME_FOREVER and FRAME GO will loop
+        # indefinitely (until FRAME OFF).
+        self._frame_loops = int(self.write("FC")[0])
 
     def write(self, *commands):
         """
@@ -98,6 +136,93 @@ class T564(object):
 
     def set_trigger_level(self,trigger_level):
         return self.write("TLEVEL " + str(trigger_level))
+
+    @property
+    def frame_start(self):
+        """The first frame in the loop."""
+        return self._frame_start
+    @frame_start.setter
+    def frame_start(self, f):
+        """Set the first frame in the loop."""
+        f = int(f)
+        return self.write("FA {:d}".format(f))
+    @property
+    def frame_end(self):
+        """The last frame in the loop."""
+        return self._frame_end
+    @frame_end.setter
+    def frame_end(self, f):
+        """Set the last frame in the loop."""
+        f = int(f)
+        if f <= self.frame_start:
+            raise ValueError("Last frame must come after first frame.")
+        else:
+            return self.write("FB {:d}".format(f))
+    @property
+    def frame_loops(self):
+        """
+        The number of times the T564 will loop through the frames when
+        T564.frame_start() is called.  If this value is 0, then the
+        frames will loop forever.
+
+        FRAME GO runs once, then repeats FC times.  This value is
+        therefore one larger than what is returned by FC.
+        """
+        if self._frame_loops == T564.FRAME_FOREVER:
+            return 0
+        else:
+            return self._frame_loops + 1
+    @frame_loops.setter
+    def frame_loops(self, num):
+        """
+        The number of times the T564 will loop through the frames when
+        T564.frame_start() is called.  If this value is 0, then the
+        frames will loop forever.
+        """
+        if num < 0:
+            raise ValueError("The number of loops must be non-negative.")
+        elif num == 0:
+            self._frame_loops = T564.FRAME_FOREVER
+            return self.write("FC {:d}".format(self._frame_loops))
+        elif num <= T564.FRAME_MAX+1:
+            self._frame_loops = num - 1 # FRAME GO runs through
+            self._frame_loops("FC {:d}".format(self._frame_loops))
+        else:
+            raise ValueError("The T564 can loop at most {:d} times.".format(T564.FRAME_MAX+1))
+
+    def frame_save(self, frame_num=None):
+        """
+        Save the current channel settings.  If frame_num is not
+        specified, a new frame is used.
+        """
+        self.frames[frame_num] = {
+            "A": self.a.status, "B": self.b.status,
+            "C": self.c.status, "D": self.d.status
+        }
+
+        if frame_num is not None:
+            if 0 <= frame_num <= 8191:
+                return self.write("FR {:d}".format(frame_num))
+            else:
+                raise ValueError("Frame number out of range.")
+        else:
+            return self.write("FR {:d}".format(len(self.frames)-1))
+
+    def frame_start(self):
+        """
+        Loop through the saved frames.  Note that regular triggers
+        won't restart after looping finishes, T564.frame_stop needs to
+        run first.
+        """
+        return self.write("FR GO")
+
+    def frame_stop(self):
+        """Stop looping."""
+        return self.write("FR OF")
+
+    def frame_looping(self):
+        """Check if the T564 is currently running through frames."""
+        return self.write("FR")[0] not in ["OFF\r\n", "DONE\r\n"]
 
     @staticmethod
     def norm_channel(channel):
