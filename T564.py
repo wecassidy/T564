@@ -22,21 +22,16 @@ class T564(object):
     Notes
     -----
 
-        - T564 serial commands are written in ALL CAPS
-
-        - All times are converted to nanoseconds
+    - T564 serial commands are written in ALL CAPS in documentation
+    - All times are converted to nanoseconds
     """
 
+    # Set FC to this number to loop indefinitely (until FRAME OFF).
     FRAME_FOREVER = 65535
-    """
-    Set FC to this number to loop indefinitely (until FRAME OFF).
-    """
 
+    # Maximum value of FC (the number of times FRAME GO will cycle
+    # through the frames after the first run through).
     FRAME_MAX = 65534
-    """
-    Maximum value of FC (the number of times FRAME GO will cycle
-    through the frames after the first run through).
-    """
 
     def __init__(self, address="/dev/ttyUSB0", cycle=1000):
         """
