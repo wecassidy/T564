@@ -44,7 +44,7 @@ class T564(object):
 
         self.device = serial.Serial(address,baudrate=38400,timeout=1) #,stopbits=1,parity='N',timeout=1)
 
-        self._period = norm_time(cycle)
+        self._period = T564.norm_time(cycle)
 
         ## Channel interfaces
         self.a = Channel(self, "A")
@@ -57,8 +57,8 @@ class T564(object):
         # to channel statuses (which are also dicts, see
         # Channel.status for how they are formatted).
         self.frames = {}
-        self._frame_start = int(self.write("FA")[0])
-        self._frame_end = int(self.write("FB")[0])
+        self._frame_first = int(self.write("FA")[0])
+        self._frame_last = int(self.write("FB")[0])
 
         # This variable tracks the value of FC. However, FC has some
         # quirks: FRAME GO will run through the frames FC+1 times, so
@@ -118,7 +118,7 @@ class T564(object):
         "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
         "s" (seconds).
         """
-        val = norm_time(val)
+        val = T564.norm_time(val)
 
         # Calculate the cycle frequency in Hertz
         freq = 1e9 / self._period
@@ -133,23 +133,23 @@ class T564(object):
         return self.write("TLEVEL " + str(trigger_level))
 
     @property
-    def frame_start(self):
+    def frame_first(self):
         """The first frame in the loop."""
-        return self._frame_start
-    @frame_start.setter
-    def frame_start(self, f):
+        return self._frame_first
+    @frame_first.setter
+    def frame_first(self, f):
         """Set the first frame in the loop."""
         f = int(f)
         return self.write("FA {:d}".format(f))
     @property
-    def frame_end(self):
+    def frame_last(self):
         """The last frame in the loop."""
-        return self._frame_end
-    @frame_end.setter
-    def frame_end(self, f):
+        return self._frame_last
+    @frame_last.setter
+    def frame_last(self, f):
         """Set the last frame in the loop."""
         f = int(f)
-        if f <= self.frame_start:
+        if f <= self.frame_first:
             raise ValueError("Last frame must come after first frame.")
         else:
             return self.write("FB {:d}".format(f))
