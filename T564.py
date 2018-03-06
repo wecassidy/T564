@@ -113,6 +113,37 @@ class T564(object):
         return self.write("FI")
 
     @property
+    def autoinstall(self):
+        """Check the autoinstall settings of the T564."""
+
+        val = int(self.write("AU")[0])
+        if val == 0:
+            return "off"
+        elif val == 1:
+            return "install"
+        elif val == 2:
+            return "queue"
+    @autoinstall.setter
+    def autoinstall(self, val):
+        """
+        Change the autoinstall settings of the T564.
+
+        If val is 0, "off", turn off autoinstall.  If val is 1 or
+        "install", use INSTALL (normal) mode.  If val is 2 or "queue",
+        use QUEUE mode.  See the manual section 4.7.2 for more
+        information about the various modes.
+        """
+
+        if val == 0 or val == "off":
+            return self.write("AU 0")
+        elif val == 1 or val == "install":
+            return self.write("AU 1")
+        elif val == 2 or val == "queue":
+            return self.write("AU 2")
+        else:
+            raise ValueError("Autoinstall setting must be 0/off, 1/install, or 2/queue.")
+
+    @property
     def period(self):
         """The period of the timing cycle (time between triggers) in nanoseconds."""
         return self._period
