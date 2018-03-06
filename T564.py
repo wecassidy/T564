@@ -49,18 +49,17 @@ class T564(object):
     # through the frames after the first run through).
     FRAME_MAX = 65534
 
-    def __init__(self, address="/dev/ttyUSB0", cycle=1000):
+    def __init__(self, address="/dev/ttyUSB0"):
         """
         Initialize the T564.
 
         Requires the serial port the T564 is attached to (default
-        /dev/ttyUSB0) and the duration of a timing cycle in
-        nanoseconds (default 1000ns).
+        /dev/ttyUSB0).
         """
 
         self.device = serial.Serial(address,baudrate=38400,timeout=1) #,stopbits=1,parity='N',timeout=1)
 
-        self._period = T564.norm_time(cycle)
+        self._freq = int(self.write("SY")[0]) # Frequency of the synthesizer, in hertz
 
         ## Channel interfaces
         self.a = Channel(self, "A")
@@ -160,9 +159,37 @@ class T564(object):
             raise ValueError("Autoinstall setting must be 0/off, 1/install, or 2/queue.")
 
     @property
+    def frequency(self):
+        """The frequency of the timing cycle in hertz."""
+        return self._freq
+    @frequency.setter
+    def frequency(self, val):
+        """Set the frequency of the timing cycle.
+
+        val: converted to a string.  If not given a unit, assumed to
+        be in hertz.  Acceptable units are "m" (megahertz), "k"
+        (kilohertz), and "h" (hertz).
+        """
+        val = str(val)
+        try:
+            self._freq = float(val) # Already in hz
+        except ValueError:
+            unit = val[-1]
+            number = val[:-1]
+            if unit == "m":
+                self._freq = float(number) * 1e6
+            elif unit == "k":
+                self._freq = float(number) * 1e3
+            elif unit == "h":
+                self._freq = float(number)
+            else:
+                raise ValueError("Invalid unit: {}".format(unit))
+
+        return self.write("SY {:f}".format(val))
+    @property
     def period(self):
         """The period of the timing cycle (time between triggers) in nanoseconds."""
-        return self._period
+        return 1/self._freq
     @period.setter
     def period(self, val):
         """Set the period of the timing cycle (time between triggers).
@@ -172,16 +199,8 @@ class T564(object):
         "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
         "s" (seconds).
         """
-        val = T564.norm_time(val)
-
-        # Calculate the cycle frequency in Hertz
-        freq = 1e9 / self._period
-
-        # T564 commands:
-        return self.write(
-            "SY {:f}".format(freq), # Set the frequency synthesizer
-            "TR SY", # Trigger using the frequency synthesizer
-        )
+        period = T564.norm_time(val) / 1e9 # Convert to seconds
+        self.frequency = 1 / period
 
     def set_trigger_level(self,trigger_level):
         return self.write("TLEVEL " + str(trigger_level))
