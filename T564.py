@@ -105,6 +105,13 @@ class T564(object):
         """Load the settings saved in nonvolatile memory."""
         return self.write("RE")
 
+    def trigger_software(self):
+        """Turn on software triggers."""
+        return self.write("TR RE")
+    def trigger_fire(self):
+        """Fire a software trigger."""
+        return self.write("FI")
+
     @property
     def period(self):
         """The period of the timing cycle (time between triggers) in nanoseconds."""
