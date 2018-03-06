@@ -429,18 +429,3 @@ class Channel(object):
         val = T564.norm_time(val)
         self._status["width"] = val
         self.device.write("{chan}W {arg:f}".format(chan=self.name, arg=val))
-
-gen = T564()
-gen.period = T564.norm_time("10s")
-
-gen.b.delay = 0
-gen.b.width = "10u"
-
-gen.a.delay = gen.b.width
-gen.a.width = "10m"
-
-gen.c.width = "500m"
-gen.c.delay = gen.period - gen.c.width
-
-gen.d.width = gen.c.width
-gen.d.delay = gen.c.delay
