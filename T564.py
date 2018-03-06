@@ -14,16 +14,32 @@ class T564(object):
     Simple usage
     ------------
 
+    General::
+
         >>> gen = T564() # Set up the generator
         >>> gen.a.delay = "500u" # Change the settings on a channel
         >>> gen.write("USEC", "FIRE") # Write one or more commands over the serial interface
         ["415238", "OK"]
 
+    Frames::
+
+        >>> gen.a.delay = "500u" # Change settings
+        >>> gen.a.width = "1m"
+        >>> gen.frame_save() # Save first frame
+        >>> gen.a.width = "2m" # Change settings
+        >>> gen.frame_save() # Save next frame
+        >>> gen.a.width = "3m"
+        >>> gen.frame_save(0) # Edit saved frame
+        >>> gen.frame_loops = 3 # Go through frames 3 times (set to 0 to loop forever)
+        >>> gen.frame_start()
+
     Notes
     -----
 
-    - T564 serial commands are written in ALL CAPS in documentation
-    - All times are converted to nanoseconds
+        - T564 serial commands are written in ALL CAPS in
+          documentation
+
+        - All times are converted to nanoseconds
     """
 
     # Set FC to this number to loop indefinitely (until FRAME OFF).
@@ -228,18 +244,19 @@ class T564(object):
         Save the current channel settings.  If frame_num is not
         specified, a new frame is used.
         """
+
+        if frame_num is None:
+            frame_num = len(self.frames) - 1
+            self.frame_last = frame_num
+        elif 0 <= frame_num <= 8191:
+            raise ValueError("Frame number out of range.")
+
         self.frames[frame_num] = {
             "A": self.a.status, "B": self.b.status,
             "C": self.c.status, "D": self.d.status
         }
 
-        if frame_num is not None:
-            if 0 <= frame_num <= 8191:
-                return self.write("FR {:d}".format(frame_num))
-            else:
-                raise ValueError("Frame number out of range.")
-        else:
-            return self.write("FR {:d}".format(len(self.frames)-1))
+        return self.write("FR {:d}".format(frame_num))
 
     def frame_start(self):
         """
