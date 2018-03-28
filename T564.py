@@ -1,9 +1,14 @@
 """
 Control class for the T564 pulse generator
+
+Written by: Wesley Cassidy
+March, 2018
 """
 
 from __future__ import division, print_function
 import serial
+from pint import UnitRegistry # Units for physical quantities
+ureg = UnitRegistry()
 
 class T564(object):
     """
@@ -16,30 +21,82 @@ class T564(object):
 
     General::
 
-        >>> gen = T564() # Set up the generator
-        >>> gen.a.delay = "500u" # Change the settings on a channel
+        >>> import T564
+        >>> from T564 import ureg # Import the unit registry -- not necessary, but makes working with units much easier
+        >>> gen = T564.T564() # Set up the generator
+        >>> gen.a.delay = 500 * ureg.us # Change the settings on a channel
         >>> gen.write("USEC", "FIRE") # Write one or more commands over the serial interface
         ["415238", "OK"]
 
     Frames::
 
-        >>> gen.a.delay = "500u" # Change settings
-        >>> gen.a.width = "1m"
-        >>> gen.frame_save() # Save first frame
-        >>> gen.a.width = "2m" # Change settings
-        >>> gen.frame_save() # Save next frame
-        >>> gen.a.width = "3m"
-        >>> gen.frame_save(0) # Edit saved frame
-        >>> gen.frame_loops = 3 # Go through frames 3 times (set to 0 to loop forever)
-        >>> gen.frame_start()
+        gen.frame_clear() # Clear old frames
+        gen.a.delay = 500 * ureg.us # Change settings
+        gen.a.width = 1 * ureg.ms
+        gen.frame_save() # Save first frame
+        gen.a.width = 5 * ureg.ms # Change settings
+        gen.frame_save() # Save next frame
+        gen.a.width = 20 * ureg.ms
+        gen.frame_save() # Edit saved frame
+        gen.frame_loops = 3 # Go through frames 3 times (set to 0 to loop forever)
+        gen.frame_start()
+
+    Units
+    -----
+
+    T564 handles physical quantities through the Pint package. Use
+    is extremely simple: just multiply a scalar by any of the units
+    in the unit registry object, ureg. For more information, see
+    Pint's documentation at http://pint.readthedocs.io/en/latest/.
+
+    If units aren't specified, the code assumes nanoseconds for
+    times and hertz for frequencies.
+
+    Properties
+    ----------
+
+    This code makes extensive use of Python's properties feature.
+    Properties are a way of assigning getter and setter methods to
+    object attributes without changing the user-facing interface.
+    Here's a brief example::
+
+        class A(object):
+            ...
+            @property
+            def x(self):
+                return self._x
+            @x.setter
+            def x(self, val):
+                if val > 0:
+                    self._x = val
+
+    Then, x can be used like any normal attribute, except that it's
+    value must be positive::
+
+        >>> a = A()
+        >>> a.x = 3
+        >>> a.x
+        3
+        >>> a.x = -1
+        >>> a.x
+        3
+
+    In this snippet, the @property decorator designates the first A.x
+    method as x's getter and @x.setter designates the second A.x
+    method as the setter. This means that anytime code accesses A.x,
+    the first method will be called and anytime code sets A.x, the
+    second will be called. Note that the two methods must have the
+    same name. A docstring on the getter method acts as the docstring
+    for the property.
+
+    For more information on properties and how to use them, see
+    https://docs.python.org/2/library/functions.html#property.
 
     Notes
     -----
 
         - T564 serial commands are written in ALL CAPS in
           documentation
-
-        - All times are converted to nanoseconds
     """
 
     # Set FC to this number to loop indefinitely (until FRAME OFF).
@@ -48,10 +105,10 @@ class T564(object):
     # Maximum value of FC (the number of times FRAME GO will cycle
     # through the frames after the first run through).
     FRAME_MAX_LOOPS = 65534
-    
+
     # Maximum number of frames
     FRAME_MAX_NUM = 8191
-    
+
 
     def __init__(self, address="/dev/ttyUSB1"):
         """
@@ -63,7 +120,7 @@ class T564(object):
 
         # Open the serial port in nonblocking mode (timeout = 0)
         self.device = serial.Serial(port=address, baudrate=38400, timeout=0) #,stopbits=1,parity='N',timeout=1)
-    
+
         # Default settings
         self.write("VE 0") # Turn off verbose mode
         self.autoinstall = "install" # Automatically install channel settings immediatelys
@@ -81,7 +138,7 @@ class T564(object):
         # to channel statuses (which are also dicts, see
         # Channel.status for how they are formatted).
         self.frames = {}
-        
+
         self._frame_first = int(self.write("FA")[0])
         self._frame_last = int(self.write("FB")[0])
 
@@ -191,47 +248,31 @@ class T564(object):
 
     @property
     def frequency(self):
-        """The frequency of the timing cycle in hertz."""
+        """
+        The frequency of the timing cycle. If not given a unit,
+        assumed to be in hertz. Maximum value: 16 MHz
+        """
         return self._freq
     @frequency.setter
+    @ureg.wraps(None, (None, ureg.Hz), strict=False)
     def frequency(self, val):
-        """Set the frequency of the timing cycle.
+        """Setter method for the frequency property."""
+        self._freq = val
+        return self.write("SY {:f}".format(self._freq), "TR SY")
 
-        val: converted to a string.  If not given a unit, assumed to
-        be in hertz.  Acceptable units are "m" (megahertz), "k"
-        (kilohertz), and "h" (hertz).
-        """
-        val = str(val)
-        try:
-            self._freq = float(val) # Already in hz
-        except ValueError:
-            unit = val[-1]
-            number = val[:-1]
-            if unit == "m":
-                self._freq = float(number) * 1e6
-            elif unit == "k":
-                self._freq = float(number) * 1e3
-            elif unit == "h":
-                self._freq = float(number)
-            else:
-                raise ValueError("Invalid unit: {}".format(unit))
-
-        return self.write("SY {:f}".format(val))
     @property
     def period(self):
-        """The period of the timing cycle (time between triggers) in nanoseconds."""
+        """
+        The period of the timing cycle (time between triggers). If
+        not given a unit, assumed to be in nanoseconds. Minimum
+        value: 62.5 ns
+        """
         return 1/self._freq
     @period.setter
+    @ureg.wraps(None, (None, ureg.ns), strict=False)
     def period(self, val):
-        """Set the period of the timing cycle (time between triggers).
-
-        val: converted to a string.  If not given a unit, assumed to
-        be in nanoseconds.  Acceptable units are "p" (picoseconds),
-        "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
-        "s" (seconds).
-        """
-        period = T564.norm_time(val) / 1e9 # Convert to seconds
-        self.frequency = 1 / period
+        """Setter method for the period property."""
+        self.frequency = 1 / val
 
     def set_trigger_level(self,trigger_level):
         return self.write("TLEVEL " + str(trigger_level))
@@ -350,31 +391,6 @@ class T564(object):
         else:
             return chanDict[channel]
 
-    @staticmethod
-    def norm_time(val):
-        """Convert a time number string to a float number of nanoseconds."""
-
-        val = str(val) # Convert to a string if it isn't already one
-        try: # Already in nanoseconds
-            duration = float(val)
-        except ValueError: # Unit included
-            unit = val[-1]
-            number = val[:-1]
-            if unit == "p":
-                duration = float(number) * 1e-3
-            elif unit == "n":
-                duration = float(number)
-            elif unit == "u":
-                duration = float(number) * 1e3
-            elif unit == "m":
-                duration = float(number) * 1e6
-            elif unit == "s":
-                duration = float(number) * 1e9
-            else:
-                raise ValueError("Invalid unit: {}".format(unit))
-
-        return duration
-
 class Channel(object):
     """A T564 channel"""
 
@@ -401,8 +417,8 @@ class Channel(object):
 
                 # When parsing numbers, remove commas that may have been
                 # added by verbose mode and convert seconds to nanoseconds
-                "delay": float(terms[5].replace(",", "")) * 1e9,
-                "width": float(terms[7].replace(",", "")) * 1e9
+                "delay": float(terms[5].replace(",", "")) * ureg.s,
+                "width": float(terms[7].replace(",", "")) * ureg.s
             }
 
             return status
@@ -468,39 +484,29 @@ class Channel(object):
 
     @property
     def delay(self):
-        """Delay between pulses in nanoseconds"""
+        """
+        The time between the trigger firing and the rising edge of
+        the pulse (or falling edge, in negative mode).
+        """
         return self._status["delay"]
     @delay.setter
+    @ureg.wraps(None, (None, ureg.ns), strict=False)
     def delay(self, val):
         """
         Set the time between the trigger firing and the rising edge of
         the pulse.
-
-        val: converted to a string.  If not given a unit, assumed to
-        be in nanoseconds.  Acceptable units are "p" (picoseconds),
-        "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
-        "s" (seconds).
         """
-
-        val = T564.norm_time(val)
         self._status["delay"] = val
         self.device.write("{chan}D {arg:f}".format(chan=self.name, arg=val))
 
     @property
     def width(self):
-        """Length of a pulse in nanoseconds"""
+        """Length of a pulse."""
         return self._status["width"]
     @width.setter
+    @ureg.wraps(None, (None, ureg.ns), strict=False)
     def width(self, val):
-        """
-        Set the duration of the pulse.
+        """Set the duration of the pulse."""
 
-        val: converted to a string.  If not given a unit, assumed to
-        be in nanoseconds.  Acceptable units are "p" (picoseconds),
-        "n" (nanoseconds), "u" (microseconds), "m" (milliseconds), and
-        "s" (seconds).
-        """
-
-        val = T564.norm_time(val)
         self._status["width"] = val
         self.device.write("{chan}W {arg:f}".format(chan=self.name, arg=val))
