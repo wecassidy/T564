@@ -154,6 +154,28 @@ class T564(object):
         # indefinitely (until FRAME OFF).
         self._frame_loops = int(self.write("FC")[0])
 
+        # Reset all frame variables
+        self.frame_clear()
+
+    def self_test(self):
+        self.frame_clear()
+        self.a.delay = 500 * ureg.us
+        self.a.width = 1 * ureg.ms
+        self.frame_save()
+        self.a.width = 3 * ureg.ms
+        self.frame_save()
+        #self.a.width = 5 * ureg.ms
+        #self.frame_save()
+        self.frame_loops = 3 # (set to 0 to loop forever)
+        self.frame_stop()
+        print("! Starting self test !")
+        print("A output should output 1,3,5, ms pulses and repeat 300 times")
+        print("Running through frames ...")
+        self.frame_start()
+        while self.frame_looping(): pass
+        print("done")
+        return
+
     def write(self, *commands):
         """
         Write one or more commands over the serial interface.
@@ -204,6 +226,21 @@ class T564(object):
         """
         return self.write("SA")
 
+    def clock_out(self):
+        '''
+        Outputs 10 MHz clock signal
+        '''
+        return self.write("CL OU")
+
+    def clock_in(self):
+        '''
+        Finds and accept an external clock signal to the CLOCK input
+        '''
+        return self.write("CL IN")
+
+    def clock_status(self):
+        return self.write("CL")
+
     def recall(self):
         """Load the settings saved in nonvolatile memory."""
         return self.write("RE")
@@ -211,6 +248,7 @@ class T564(object):
     def trigger_software(self):
         """Turn on software triggers."""
         return self.write("TR RE")
+
     def trigger_fire(self):
         """Fire a software trigger."""
         return self.write("FI")
@@ -441,6 +479,10 @@ class Channel(object):
 
         val: a truthy value enables the channel and a falsy value
         disables it.
+
+        Truthy values are anything that evaulates to True when
+        converted to a boolean, and a falsey value is anything that
+        evaluates to False.
         """
 
         if val:
