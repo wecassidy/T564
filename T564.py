@@ -47,9 +47,13 @@ class T564(object):
 
     # Maximum value of FC (the number of times FRAME GO will cycle
     # through the frames after the first run through).
-    FRAME_MAX = 65534
+    FRAME_MAX_LOOPS = 65534
+    
+    # Maximum number of frames
+    FRAME_MAX_NUM = 8191
+    
 
-    def __init__(self, address="/dev/ttyUSB0"):
+    def __init__(self, address="/dev/ttyUSB1"):
         """
         Initialize the T564.
 
@@ -97,13 +101,34 @@ class T564(object):
 
         Returns the responses in a list of strings, one per command.
         """
-        self.device.write(";".join(commands)+"\r") # '\r' (carriage return) terminates commands
 
-        response = self.device.readlines() # Read raw response
-        response = "\n".join(response) # Join into one long string
-        response = response.split(";") # Split again by command
+        # By terminating the command with a semicolon, we guarantee
+        # the response will contain len(commands) semicolons,
+        # followed by \r\n. This means that reading the response can
+        # be done more efficiently than "wait one second and see
+        # what's in the input buffer".
+        self.device.write(";".join(commands)+";\r") # '\r' (carriage return) terminates commands
 
-        return response
+        responses = [] # All responses to the set of commands, guaranteed one response per command
+        resp = "" # The response currently being read
+        while len(responses) < len(commands): # Continue until we get all the responses
+            byte = self.device.read() # Read a byte, if available
+            if byte != ";":
+                resp += byte
+            else: # Semicolon closes a response
+                responses.append(resp)
+                resp = ""
+
+        # Consume the extraneous \r\n
+        extra = ""
+        while extra != "\r\n":
+            extra += self.device.read()
+
+        # response = self.device.readlines() # Read raw response
+        # response = "\n".join(response) # Join into one long string
+        # response = response.split(";") # Split again by command
+
+        return responses
 
     def status(self):
         statstring = self.write("STATUS")[0]
@@ -222,7 +247,7 @@ class T564(object):
     def frame_last(self, f):
         """Set the last frame in the loop."""
         f = int(f)
-        if f <= self.frame_first:
+        if f <= self.frame_first and len(self.frames) > 1: # The second check deals with the special case of saving the first frame
             raise ValueError("Last frame must come after first frame.")
         else:
             return self.write("FB {:d}".format(f))
@@ -252,11 +277,19 @@ class T564(object):
         elif num == 0:
             self._frame_loops = T564.FRAME_FOREVER
             return self.write("FC {:d}".format(self._frame_loops))
-        elif num <= T564.FRAME_MAX+1:
+        elif num <= T564.FRAME_MAX_LOOPS+1:
             self._frame_loops = num - 1 # FRAME GO runs through
-            self._frame_loops("FC {:d}".format(self._frame_loops))
+            self.write("FC {:d}".format(self._frame_loops))
         else:
-            raise ValueError("The T564 can loop at most {:d} times.".format(T564.FRAME_MAX+1))
+            raise ValueError("The T564 can loop at most {:d} times.".format(T564.FRAME_MAX_LOOPS+1))
+
+    def frame_clear(self):
+        """
+        Clear any saved frames, resetting the frame memory.
+        """
+
+        self.frames = {}
+        return self.write("RZ")
 
     def frame_save(self, frame_num=None):
         """
@@ -265,9 +298,9 @@ class T564(object):
         """
 
         if frame_num is None:
-            frame_num = len(self.frames) - 1
+            frame_num = self.frame_first + len(self.frames)
             self.frame_last = frame_num
-        elif 0 <= frame_num <= 8191:
+        elif (frame_num >= T564.FRAME_MAX_NUM) or (frame_num < 0):
             raise ValueError("Frame number out of range.")
 
         self.frames[frame_num] = {
@@ -291,7 +324,7 @@ class T564(object):
 
     def frame_looping(self):
         """Check if the T564 is currently running through frames."""
-        return self.write("FR")[0] not in ["OFF\r\n", "DONE\r\n"]
+        return self.write("FR")[0].strip() not in ["OFF", "DONE"]
 
     @staticmethod
     def norm_channel(channel):
