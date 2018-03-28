@@ -61,21 +61,27 @@ class T564(object):
         /dev/ttyUSB0).
         """
 
-        self.device = serial.Serial(address,baudrate=38400,timeout=1) #,stopbits=1,parity='N',timeout=1)
+        # Open the serial port in nonblocking mode (timeout = 0)
+        self.device = serial.Serial(port=address, baudrate=38400, timeout=0) #,stopbits=1,parity='N',timeout=1)
+    
+        # Default settings
+        self.write("VE 0") # Turn off verbose mode
+        self.autoinstall = "install" # Automatically install channel settings immediatelys
 
-        self._freq = int(self.write("SY")[0]) # Frequency of the synthesizer, in hertz
+        self.frequency = 16 * ureg.MHz  # Set the frequency synthesizer to 16 MHz. Code is set up to trigger off internal synthesizer.
 
-        ## Channel interfaces
+        # Channel interfaces
         self.a = Channel(self, "A")
         self.b = Channel(self, "B")
         self.c = Channel(self, "C")
         self.d = Channel(self, "D")
 
-        ## Frames
+        # Frames
         # A dict mapping frame numbers to dicts mapping channel names
         # to channel statuses (which are also dicts, see
         # Channel.status for how they are formatted).
         self.frames = {}
+        
         self._frame_first = int(self.write("FA")[0])
         self._frame_last = int(self.write("FB")[0])
 
