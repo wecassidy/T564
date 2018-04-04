@@ -29,48 +29,55 @@ class T564(object):
         >>> gen.write("USEC", "FIRE") # Write one or more commands over the serial interface
         ["415238", "OK"]
 
+    All channels start disabled, so remember to set the "enabled"
+    property of any channel you want to use to True.
+
     Frames::
 
-        gen.frame_clear() # Clear old frames
-        gen.a.delay = 500 * ureg.us # Change settings
-        gen.a.width = 1 * ureg.ms
-        gen.frame_save() # Save first frame
-        gen.a.width = 5 * ureg.ms # Change settings
-        gen.frame_save() # Save next frame
-        gen.a.width = 20 * ureg.ms
-        gen.frame_save() # Edit saved frame
-        gen.frame_loops = 3 # Go through frames 3 times (set to 0 to loop forever)
-        gen.frame_start()
-        
+        >>> gen.frame_clear() # Clear old frames
+        >>> gen.a.delay = 500 * ureg.us # Change settings
+        >>> gen.a.width = 1 * ureg.ms
+        >>> gen.frame_save() # Save first frame
+        >>> gen.a.width = 5 * ureg.ms # Change settings
+        >>> gen.frame_save() # Save next frame
+        >>> gen.a.width = 20 * ureg.ms
+        >>> gen.frame_save() # Edit saved frame
+        >>> gen.frame_loops = 3 # Go through frames 3 times (set to 0 to loop forever)
+        >>> gen.frame_start()
+
     Pulse trains::
-        
+
         >>> gen.a.width = 500 * ureg.us
         >>> gen.a.delay = 20 * ureg.ns
         >>> gen.train_count = 5
         >>> gen.train_spacing = 1 * ureg.ms
-        
+
+    The minimum delay on a channel if pulse trains are being used is
+    20 ns. If the delay is less than that value, the channel will only
+    pulse once per trigger.
+
     Train mode
     ----------
-    
+
     The T564 can generate a pulse train after each trigger using train
     mode. Set the number of pulses in the train (up to 2^32) using the
     T564.train_count property. To disable pulse trains, set
     T564.train_count to 1.
-    
+
     The spacing between pulses is set by the T564.train_spacing
     property and rounded to the nearest 20 ns. The spacing must be at
     least 80ns greater than the time from the first rising edge on any
     channel to the last falling edge on any channel. Any attempts to
     set the spacing lower than this will result in pulse spacing equal
     to the minimum. The maximum pulse spacing is 10 s.
-    
+
     There must be a delay of at least 20 ns on any channel that is to
     be repeated in the pulse train. This means that if you wish to
     disable the train on any single channel, you can do this by
     setting its delay to any number below that value. The pulse
     spacing calculation does not take into account channels which
     aren't included in the train.
-    
+
     Pulse train settings are included in frames. This means that it is
     possible to have a frame that includes a pulse train followed by
     one without.
@@ -78,13 +85,13 @@ class T564(object):
     Units
     -----
 
-    T564 handles physical quantities through the Pint package. Use
-    is extremely simple: just multiply a scalar by any of the units
-    in the unit registry object, ureg. For more information, see
-    Pint's documentation at http://pint.readthedocs.io/en/latest/.
+    T564 handles physical quantities through the Pint package. Use is
+    extremely simple: just multiply a scalar by any of the units in
+    the unit registry object, ureg. For more information, see Pint's
+    documentation at http://pint.readthedocs.io/en/latest/.
 
-    If units aren't specified, the code assumes nanoseconds for
-    times and hertz for frequencies.
+    If units aren't specified, the code assumes nanoseconds for times
+    and hertz for frequencies.
 
     Properties
     ----------
@@ -123,7 +130,7 @@ class T564(object):
     same name. A docstring on the getter method acts as the docstring
     for the property.
 
-    For more information on properties and how to use them, see 
+    For more information on properties and how to use them, see
     https://docs.python.org/2/library/functions.html#property.
 
     Notes
@@ -139,14 +146,14 @@ class T564(object):
     # Maximum value of FC (the number of times FRAME GO will cycle
     # through the frames after the first run through).
     FRAME_MAX_LOOPS = 65534
-    
+
     # Maximum number of frames
     FRAME_MAX_NUM = 8191
-    
-    
+
+
     # Maximum number of pulses per trigger when train mode is on
     TRAIN_MAX_PULSES = 2**32
-    
+
     # Largest spacing between pulses in train mode
     TRAIN_MAX_SPACING = 10 * ureg.s
 
@@ -166,7 +173,7 @@ class T564(object):
         "DPLL stability error",
         "other error (likely something wrong with the command)"
     ]
-    
+
 
     def __init__(self, address="/dev/ttyUSB1"):
         """
@@ -178,7 +185,7 @@ class T564(object):
 
         # Open the serial port in nonblocking mode (timeout = 0)
         self.device = serial.Serial(port=address, baudrate=38400, timeout=0) #,stopbits=1,parity='N',timeout=1)
-    
+
         # Default settings
         self.write("VE 0") # Turn off verbose mode
         self.autoinstall = "install" # Automatically install channel settings immediatelys
@@ -191,7 +198,7 @@ class T564(object):
         self.c = Channel(self, "C")
         self.d = Channel(self, "D")
         self.channels = (self.a, self.b, self.c, self.d)
-        
+
         # Disable all channels by default
         for chan in self.channels:
             chan.enabled = False
@@ -201,7 +208,7 @@ class T564(object):
         # to channel statuses (which are also dicts, see
         # Channel.status for how they are formatted).
         self.frames = {}
-        
+
         self._frame_first = int(self.write("FA")[0])
         self._frame_last = int(self.write("FB")[0])
 
@@ -219,20 +226,20 @@ class T564(object):
 
         # Reset all frame variables
         self.frame_clear()
-        
+
         # Train mode
         self._train_count = int(self.write("TC")[0])
         self._train_space = int(self.write("TS")[0]) * 20 * ureg.ns
-    
+
     def self_test(self):
         self.frame_clear()
-        self.a.delay = 500 * ureg.us 
+        self.a.delay = 500 * ureg.us
         self.a.width = 1 * ureg.ms
-        self.frame_save() 
-        self.a.width = 3 * ureg.ms  
-        self.frame_save() 
+        self.frame_save()
+        self.a.width = 3 * ureg.ms
+        self.frame_save()
         #self.a.width = 5 * ureg.ms
-        #self.frame_save() 
+        #self.frame_save()
         self.frame_loops = 3 # (set to 0 to loop forever)
         self.frame_stop()
         print("! Starting self test !")
@@ -253,7 +260,7 @@ class T564(object):
 
         Returns the responses in a list of strings, one per command.
         """
-        
+
         # Split commands that contain semicolons
         commands = []
         for c in cmds:
@@ -272,7 +279,7 @@ class T564(object):
             byte = self.device.read() # Read a byte, if available
             if byte != ";":
                 resp += byte
-                
+
                 # Handle errors
                 if resp == "??\r\n": # ?? indicates an error, and no commands are processed after an error occurs
                     error_indicator = self.write("ER")[0].split()[1] # The second word returned by ERRORS
@@ -283,7 +290,7 @@ class T564(object):
 
                         # Separate the error number into individual bits (there are 7)
                         bits = [(errors >> n) & 0b1 for n in range(7)]
-                    
+
                         # Construct the error message
                         msgs = itertools.compress(T564.ERROR_MESSAGES, bits) # msgs will contain only error messages whose bits are high
                         message = msgs.next() # Get the first message
@@ -299,7 +306,7 @@ class T564(object):
         extra = ""
         while extra != "\r\n":
             extra += self.device.read()
-            
+
         return responses
 
     def status(self):
@@ -312,22 +319,22 @@ class T564(object):
         T564.recall() method to load saved settings.
         """
         return self.write("SA")
-    
+
     def clock_out(self):
         '''
         Outputs 10 MHz clock signal
         '''
-        return self.write("CL OU") 
-    
+        return self.write("CL OU")
+
     def clock_in(self):
         '''
         Finds and accept an external clock signal to the CLOCK input
         '''
-        return self.write("CL IN") 
-    
-    def clock_status(self): 
+        return self.write("CL IN")
+
+    def clock_status(self):
         return self.write("CL")
-        
+
     def recall(self):
         """Load the settings saved in nonvolatile memory."""
         return self.write("RE")
@@ -335,11 +342,11 @@ class T564(object):
     def trigger_synthesizer(self):
         """Turn on triggers from the internal frequency synthesizer."""
         return self.write("TR SY")
-        
+
     def trigger_software(self):
         """Turn on software triggers."""
         return self.write("TR RE")
-        
+
     def trigger_fire(self):
         """Fire a software trigger."""
         return self.write("FI")
@@ -501,7 +508,7 @@ class T564(object):
     def frame_looping(self):
         """Check if the T564 is currently running through frames."""
         return self.write("FR")[0].strip() not in ["OFF", "DONE"]
-        
+
     @property
     def train_count(self):
         """The number of pulses in the pulse train. Set to 1 to disable."""
@@ -509,16 +516,16 @@ class T564(object):
     @train_count.setter
     def train_count(self, num):
         """Setter method for the train_count property."""
-        
+
         # Sanity check the argument
         if num < 1:
             raise ValueError("Train count must be positive.")
         elif num > T564.TRAIN_MAX_PULSES:
             raise ValueError("Maximum number of pulses is 2^32.")
-        
+
         self._train_count = num - 1
         self.write("TC {}".format(self._train_count))
-        
+
     @property
     def train_spacing(self):
         """
@@ -530,7 +537,7 @@ class T564(object):
     @ureg.wraps(None, ureg.ns, strict=False)
     def train_spacing(self, val):
         """Set the train spacing."""
-        
+
         # Get the width between the first rising edge and last falling edge
         rise_times = []
         fall_times = []
@@ -538,11 +545,11 @@ class T564(object):
             if chan.delay >= 20 * ureg.ns and chan.enabled:
                 rise_times.append(chan.delay)
                 fall_times.append(chan.delay + chan.width)
-                
+
         min_spacing = max(fall_times) - min(rise_times) + 80 * ureg.ns
-        
+
         self._train_space = max(val, min_spacing).to(ureg.ns) / 20
-        
+
         self.write("TS {}".format(self._train_space.magnitude))
 
     @staticmethod
