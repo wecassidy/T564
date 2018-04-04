@@ -243,7 +243,7 @@ class T564(object):
         print("done")
         return
 
-    def write(self, *commands):
+    def write(self, *cmds):
         """
         Write one or more commands over the serial interface.
         Multiple commands will be joined into one long string to be
@@ -253,6 +253,11 @@ class T564(object):
 
         Returns the responses in a list of strings, one per command.
         """
+        
+        # Split commands that contain semicolons
+        commands = []
+        for c in cmds:
+            commands.extend(c.split(";"))
 
         # By terminating the command with a semicolon, we guarantee
         # the response will contain len(commands) semicolons,
@@ -267,6 +272,25 @@ class T564(object):
             byte = self.device.read() # Read a byte, if available
             if byte != ";":
                 resp += byte
+                
+                # Handle errors
+                if resp == "??\r\n": # ?? indicates an error, and no commands are processed after an error occurs
+                    error_indicator = self.write("ER")[0].split()[1] # The second word returned by ERRORS
+                    if error_indicator == "None": # Something went wrong that doesn't have a predefined message
+                        message = T564.ERROR_MESSAGES[-1]
+                    else:
+                        errors = int(error_indicator) # Get the error number
+
+                        # Separate the error number into individual bits (there are 7)
+                        bits = [(errors >> n) & 0b1 for n in range(7)]
+                    
+                        # Construct the error message
+                        msgs = itertools.compress(T564.ERROR_MESSAGES, bits) # msgs will contain only error messages whose bits are high
+                        message = msgs.next() # Get the first message
+                        for msg in msgs:
+                            message += ", " + msg
+
+                    raise T564Error(message) # Include the command that caused an error and the responses so far in the error message
             else: # Semicolon closes a response
                 responses.append(resp)
                 resp = ""
@@ -288,30 +312,34 @@ class T564(object):
         T564.recall() method to load saved settings.
         """
         return self.write("SA")
-
+    
     def clock_out(self):
         '''
         Outputs 10 MHz clock signal
         '''
-        return self.write("CL OU")
-
+        return self.write("CL OU") 
+    
     def clock_in(self):
         '''
         Finds and accept an external clock signal to the CLOCK input
         '''
-        return self.write("CL IN")
-
-    def clock_status(self):
+        return self.write("CL IN") 
+    
+    def clock_status(self): 
         return self.write("CL")
-
+        
     def recall(self):
         """Load the settings saved in nonvolatile memory."""
         return self.write("RE")
 
+    def trigger_synthesizer(self):
+        """Turn on triggers from the internal frequency synthesizer."""
+        return self.write("TR SY")
+        
     def trigger_software(self):
         """Turn on software triggers."""
         return self.write("TR RE")
-
+        
     def trigger_fire(self):
         """Fire a software trigger."""
         return self.write("FI")
@@ -370,7 +398,7 @@ class T564(object):
         """
         return 1/self._freq
     @period.setter
-    @ureg.wraps(None, (None, ureg.ns), strict=False)
+    @ureg.wraps(None, (None, ureg.s), strict=False)
     def period(self, val):
         """Setter method for the period property."""
         self.frequency = 1 / val
@@ -644,7 +672,7 @@ class Channel(object):
         Set the time between the trigger firing and the rising edge of
         the pulse.
         """
-        self._status["delay"] = val
+        self._status["delay"] = val * ureg.ns
         self.device.write("{chan}D {arg:f}".format(chan=self.name, arg=val))
 
     @property
@@ -656,5 +684,12 @@ class Channel(object):
     def width(self, val):
         """Set the duration of the pulse."""
 
-        self._status["width"] = val
+        self._status["width"] = val * ureg.ns
         self.device.write("{chan}W {arg:f}".format(chan=self.name, arg=val))
+
+class T564Error(RuntimeError):
+    """
+    A custom error to indicate something wrong with the T564, so that
+    catch clauses in higher-level code can be specific enough to only
+    catch errors from the T564, if they need to.
+    """
